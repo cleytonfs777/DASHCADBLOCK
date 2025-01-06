@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  dash_app:
+    build:
+      context: .
+    container_name: dash_app
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./resposta.json:/app/resposta.json
+      - ./assets:/app/assets
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always

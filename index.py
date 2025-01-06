@@ -243,20 +243,23 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.Div([
-                html.H2("Mapa de Prioridades por Coordenadas", className="text-center", style={'font-weight': 'bold'}),
-                dcc.Graph(id="map_priorities", config={"displayModeBar": False})
+                html.H2("Mapa de Prioridades", className="text-center", style={'font-weight': 'bold'}),
+                dcc.Graph(
+                    id="map_priorities",
+                    config={"scrollZoom": True}
+                )
             ])
-        ])
-    ], className="align-items-center mb-4"),
-
-    dbc.Row([
+        ], md=6),
         dbc.Col([
             html.Div([
-                html.H2("Mapa de Recursos por Coordenadas", className="text-center", style={'font-weight': 'bold'}),
-                dcc.Graph(id="map_resources", config={"displayModeBar": False})
+                html.H2("Mapa de Recursos Empenhados", className="text-center", style={'font-weight': 'bold'}),
+                dcc.Graph(
+                    id="map_resources",
+                    config={"scrollZoom": True}
+                )
             ])
-        ])
-    ], className="align-items-center mb-4")
+        ], md=6)
+    ])
 ], fluid=True)
 
 # Callbacks =========================================================
@@ -316,7 +319,17 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     top_recursos = recursos_empenhados.loc[recursos_empenhados["TotalRecursos"].idxmax()]
     media_recursos = recursos_empenhados["TotalRecursos"].mean()
 
-
+    # Expandir os recursos empenhados em coordenadas separadas
+    recursos = []
+    for _, row in df.iterrows():
+        for recurso in row["recursos_empenhados"].split(" / "):
+            recursos.append({
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "recurso": recurso,
+                "local": row["local_fato"]
+            })
+    df_recursos = pd.DataFrame(recursos)
     # ===== Graficos =====
 
     # Conjunto de todas as viaturas únicas
@@ -482,6 +495,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     )
         
  # Mapa de Prioridades
+ # Mapa de Prioridades
     fig_priorities = px.scatter_mapbox(
         df,
         lat="latitude",
@@ -491,9 +505,10 @@ def line_graph_1(start_date, end_date, cobs, toggle):
         title="Mapa de Prioridades",
         labels={"Prioridade_nome": "Prioridade"},
         color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
-        zoom=10,
-        height=500
+        zoom=6,
+        height=600
     )
+    fig_priorities.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
     fig_priorities.update_layout(
         mapbox_style="carto-positron",
         margin={"r": 0, "t": 30, "l": 0, "b": 0},
@@ -501,17 +516,6 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     )
 
     # Mapa de Recursos
-    recursos = []
-    for idx, row in df.iterrows():
-        for recurso in row["recursos_empenhados"].split(" / "):
-            recursos.append({
-                "latitude": row["latitude"],
-                "longitude": row["longitude"],
-                "recurso": recurso,
-                "local": row["local_fato"]
-            })
-    df_recursos = pd.DataFrame(recursos)
-
     fig_resources = px.scatter_mapbox(
         df_recursos,
         lat="latitude",
@@ -520,9 +524,10 @@ def line_graph_1(start_date, end_date, cobs, toggle):
         hover_data={"local": True},
         title="Mapa de Recursos Empenhados",
         color_discrete_sequence=["#636EFA"],
-        zoom=10,
-        height=500
+        zoom=6,
+        height=600
     )
+    fig_resources.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
     fig_resources.update_layout(
         mapbox_style="carto-positron",
         margin={"r": 0, "t": 30, "l": 0, "b": 0},
@@ -530,10 +535,9 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     )
 
 
-
     return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig_priorities, fig_resources
 
 
 # Rodar o servidor ================================================
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, host="0.0.0.0", port=8050)
