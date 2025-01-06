@@ -1,0 +1,500 @@
+import dash
+from dash import html, dcc, Input, Output
+import dash_bootstrap_components as dbc
+import plotly.express as px
+import pandas as pd
+from dash_bootstrap_templates import ThemeSwitchAIO
+import plotly.graph_objects as go
+import json
+
+
+# Configuração do Dash (Stylesheet e título) ==========================
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.VAPOR, dbc.themes.FLATLY])
+app.title = "Dashboard de Ocorrências - CBMMG"
+template_theme1 = "vapor"
+template_theme2 = "flatly"
+url_theme1 = dbc.themes.VAPOR
+url_theme2 = dbc.themes.FLATLY
+
+# Inputs importantes
+
+
+# Funções Auxiliares ================================================
+
+# Função para calcular o total de viaturas únicas em cada linha
+def calcular_total_vtr(linha):
+    return len(set(linha.split(' / ')))
+
+# Reading Data =======================================================
+# Carregar dados
+df = pd.read_json("resposta.json")  # Substitua pelo caminho correto do arquivo
+
+
+# Cria as colunas data e hora e remove a coluna data_criacao
+df["data"] = pd.to_datetime(df["data_criacao"], format="%d/%m/%Y %H:%M:%S").dt.strftime("%d/%m/%Y")
+df["hora"] = pd.to_datetime(df["data_criacao"], format="%d/%m/%Y %H:%M:%S").dt.strftime("%H:%M")
+df.drop(columns="data_criacao", inplace=True)
+
+
+# Cria mapa de correspondencia de cob e unidade
+# Mapas de correspondência
+cob_map = {
+    "1COB": ["1BBM", "2BBM", "3BBM", "10BBM", "5CIA IND", "1COB"],
+    "2COB": ["5BBM", "8BBM", "12BBM", "2COB"],
+    "3COB": ["4BBM", "2CIA IND", "3COB"],
+    "4COB": ["7BBM", "6CIA IND", "4COB"],
+    "5COB": ["6BBM", "11BBM", "5COB"],
+    "6COB": ["9BBM", "1CIA IND", "7CIA IND", "6COB"]
+}
+
+unidade_map = {
+    "1BBM": "1BBM", "2BBM": "2BBM", "3BBM": "3BBM", "10BBM": "10BBM",
+    "5CIA IND": "5CIA IND", "5BBM": "5º BBM", "8BBM": "8BBM", "12BBM": "12BBM",
+    "4BBM": "4BBM", "2CIA IND": "2CIA IND", "7BBM": "7BBM", "6CIA IND": "6CIA IND",
+    "6BBM": "6BBM", "11BBM": "11BBM", "5COB": "5COB", "9BBM": "9BBM",
+    "1CIA IND": "1CIA IND", "7CIA IND": "7CIA IND",
+    "1COB": "1ºCOB - RMBH/Divinóplis",
+}
+
+# Função para encontrar COB
+def find_cob(row):
+    for cob, valores in cob_map.items():
+        if any(item in row for item in valores):
+            return cob
+    return ""
+
+# Função para encontrar UNIDADE
+def find_unidade(row):
+    for unidade, valor in unidade_map.items():
+        if unidade in row:
+            return valor
+    return ""
+
+
+# Aplicar as funções para criar as colunas
+df["COB"] = df["unidade_responsavel"].apply(find_cob)
+df["UNIDADE"] = df["unidade_responsavel"].apply(find_unidade)
+
+# EXIBIR OS CAMPOR UNIDADE e unidade_responsável em forma de dataframe
+print("DATAFRAME UNIDADE")
+print(df[["UNIDADE", "unidade_responsavel"]].head(30))
+
+# Extrair o município
+df["municipio"] = df["local_fato"].str.split(" - ").str[-1]
+
+# Criar a coluna 'Natureza' com a regex ajustada
+df["Natureza"] = df["natureza"].str.extract(r"^(.\d{5} - [A-Z ]+)")
+
+# Criar a coluna 'Prioridade'
+df["Prioridade"] = df["natureza"].str.extract(r"Prioridade: (\d)")
+
+# Transformar Prioridade em String
+df['Prioridade'] = df['Prioridade'].astype(str)
+
+# Remover a coluna original 'natureza'
+df.drop(columns=["natureza"], inplace=True)
+
+# Remover as colunas indesejadas
+df = df.drop(columns=["unidade_responsavel", "alerta", "destaque", "envolve_autoridade", "situacao", "data_situacao_atual"])
+
+# Otimização do DataFrame
+# Converter colunas com valores repetidos para category
+categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
+for col in categorical_columns:
+    df[col] = df[col].astype("category")
+
+# Converter latitude e longitude para float32
+df["latitude"] = df["latitude"].astype("float32")
+df["longitude"] = df["longitude"].astype("float32")
+
+# Converter a coluna data para datetime
+df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
+
+# Converter a coluna 'data' de Unix timestamp para formato de data legível
+df["data"] = pd.to_datetime(df["data"], unit="ms")
+
+# Configurar valores iniciais e finais para o filtro de data
+data_min = df["data"].min().date()
+data_max = df["data"].max().date()
+
+### PREPARANDO PARA GERAR GRAFICOS
+# Dicionário para mapear os valores de COB para os nomes das regiões
+cob_legend = {
+    '1COB': '1ºCOB - RMBH/Divinóplis',
+    '2COB': '2ºCOB - Uberlândia',
+    '3COB': '3ºCOB - Juiz de Fora',
+    '4COB': '4ºCOB - Montes Claros',
+    '5COB': '5ºCOB - Governador Valadares',
+    '6COB': '6ºCOB - Varginha'
+}
+
+df['COB_nome'] = df['COB'].map(cob_legend)
+
+
+# Mapear Prioridades
+priori_legend = {
+    '1': 'Prioridade 1 - Alta',
+    '2': 'Prioridade 2 - Média',
+    '3': 'Prioridade 3 - Baixa'
+}
+
+df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
+
+# Lista de Cobs Unica e Ordenada
+cobs = list(df["COB_nome"].unique())
+cobs.sort()
+
+# Criando a coluna 'total_vtr' dinamicamente
+df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
+
+# Conjunto de todas as viaturas únicas
+total_viaturas = set()
+df['recursos_empenhados'].str.split(' / ').apply(total_viaturas.update)
+
+# Layout do Dashboard ================================================
+app.layout = dbc.Container([
+
+    # Linha com imagem, título e filtros
+    # Row 1
+    dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.Img(src="/assets/bombeiro.png", style={'width': '60px', 'height': '60px'}),
+                html.H2("Painel CAD Período Chuvoso", className="text-center", style={'font-weight': 'bold', 'font-size': '1.1rem'}),
+                ThemeSwitchAIO(aio_id="theme", themes=[url_theme1, url_theme2]),
+            ], className="text-center"),
+        ], md=4),
+
+        dbc.Col([
+            html.Label("Filtrar por Data:", style={'font-weight': 'bold', 'display': 'block'}),
+            dcc.DatePickerRange(
+                id="date-filter",
+                start_date=data_min,
+                end_date=data_max,
+                display_format="DD/MM/YYYY",
+                start_date_placeholder_text="Data inicial",
+                end_date_placeholder_text="Data final",
+            )
+        ], md=4),
+
+        dbc.Col([
+            html.Label("Filtrar por COB:", style={'font-weight': 'bold', 'display': 'block'}),
+            dcc.Dropdown(
+                id="cob-filter",
+                options=[{"label": cob, "value": cob} for cob in cobs],
+                value=None,
+                multi=True,
+                placeholder="Selecione o COB",
+            )
+        ], md=4),
+    ], className="align-items-center my-4"),
+
+    # Primeira linha de indicadores
+    dbc.Row([
+        dbc.Col([
+            dcc.Graph(id="indc_1", style={'height': '150px'})
+        ], md=4),
+        dbc.Col([
+            dcc.Graph(id="indc_2", style={'height': '150px'})
+        ], md=4),
+        dbc.Col([
+            dcc.Graph(id="indc_3", style={'height': '150px'})
+        ], md=4),
+    ], className="mb-2"),
+    
+    # Segunda linha de indicadores
+    dbc.Row([
+        dbc.Col([
+            dcc.Graph(id="indc_4", style={'height': '150px'})
+        ], md=4),
+        dbc.Col([
+            dcc.Graph(id="indc_5", style={'height': '150px'})
+        ], md=4),
+        dbc.Col([
+            dcc.Graph(id="indc_6", style={'height': '150px'})
+        ], md=4),
+    ], className="mb-4"),
+
+    # Gráfico
+    # Row 2
+    dbc.Row([
+        dbc.Col([
+            dbc.CardBody([
+            dcc.Graph(id="cob_pri", config={"displayModeBar": False})
+                    ]),
+        ]),
+        dbc.Col([
+            dbc.CardBody([
+            dcc.Graph(id="pri_pie", config={"displayModeBar": False})
+                    ]),
+        ]),
+
+    ], className="align-items-center mb-4"),
+
+    # Row 3
+    dbc.Row([
+        dbc.Col([
+            dbc.CardBody([
+            dcc.Graph(id="cob_nat", config={"displayModeBar": False})
+                    ]),
+        ]),
+
+    ], className="align-items-center mb-4"),
+
+    # Mapas de Prioridades e Recursos =================================
+    dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.H2("Mapa de Prioridades por Coordenadas", className="text-center", style={'font-weight': 'bold'}),
+                dcc.Graph(id="map_priorities", config={"displayModeBar": False})
+            ])
+        ])
+    ], className="align-items-center mb-4"),
+
+    dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.H2("Mapa de Recursos por Coordenadas", className="text-center", style={'font-weight': 'bold'}),
+                dcc.Graph(id="map_resources", config={"displayModeBar": False})
+            ])
+        ])
+    ], className="align-items-center mb-4")
+], fluid=True)
+
+# Callbacks =========================================================
+@app.callback(
+    Output("indc_1", "figure"),
+    Output("indc_2", "figure"),
+    Output("indc_3", "figure"),
+    Output("indc_4", "figure"),
+    Output("indc_5", "figure"),
+    Output("indc_6", "figure"),
+    Output("cob_pri", "figure"),
+    Output("pri_pie", "figure"),
+    Output("cob_nat", "figure"),
+    Output("map_priorities", "figure"),
+    Output("map_resources", "figure"),
+    Input("date-filter", "start_date"),
+    Input("date-filter", "end_date"),
+    Input("cob-filter", "value"),
+    Input(ThemeSwitchAIO.ids.switch("theme"), "value"),
+)
+def line_graph_1(start_date, end_date, cobs, toggle):
+    template = template_theme1 if toggle else template_theme2
+    # Copia profunda do Dataframe
+    df_filtered = df.copy(deep=True)
+    mask = (df_filtered["data"] >= start_date) & (df_filtered["data"] <= end_date)
+    df_filtered = df_filtered.loc[mask]
+
+    if cobs:
+        df_filtered = df_filtered[df_filtered["COB_nome"].isin(cobs)]
+
+    # Layout do Indicadores ================================================
+    # ===== Preparação dos dados para indicadores =====
+    # COB com maior número de ocorrências Prioridade 1 - Alta
+    prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("COB_nome").size().reset_index(name="Quantidade")
+    top_cob_prioridade_alta = prioridade_alta.loc[prioridade_alta["Quantidade"].idxmax()]
+    media_prioridade_alta = prioridade_alta["Quantidade"].mean()
+
+    # Município com maior frequência de ocorrências
+    municipios_frequencia = df_filtered.groupby("municipio").size().reset_index(name="Frequencia")
+    top_municipio = municipios_frequencia.loc[municipios_frequencia["Frequencia"].idxmax()]
+    media_frequencia_municipio = municipios_frequencia["Frequencia"].mean()
+
+    # Unidade com maior número de ocorrências
+    unidades_ocorrencias = df_filtered.groupby("UNIDADE").size().reset_index(name="Quantidade")
+    print(" Esse é o valor de unidades_ocorrencias", unidades_ocorrencias)
+    print(" Esses são todos os cabeçalhos do dataframe", df_filtered.columns)
+    print(" Esses são todos os valores do dataframe", df_filtered)
+    top_unidade = unidades_ocorrencias.loc[unidades_ocorrencias["Quantidade"].idxmax()]
+    media_unidade = unidades_ocorrencias["Quantidade"].mean()
+
+    # Unidade com maior número de ocorrências Prioridade 1 - Alta
+    unidade_prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("UNIDADE").size().reset_index(name="Quantidade")
+    top_unidade_prioridade_alta = unidade_prioridade_alta.loc[unidade_prioridade_alta["Quantidade"].idxmax()]
+    media_unidade_prioridade_alta = unidade_prioridade_alta["Quantidade"].mean()
+
+    # Unidade com maior número de recursos empenhados
+    recursos_empenhados = df_filtered.groupby("UNIDADE")["total_vtr"].sum().reset_index(name="TotalRecursos")
+    top_recursos = recursos_empenhados.loc[recursos_empenhados["TotalRecursos"].idxmax()]
+    media_recursos = recursos_empenhados["TotalRecursos"].mean()
+
+    # Total de recursos existentes
+    total_recursos_unicos = len(total_viaturas)
+
+    # ===== Indicadores =====
+
+    # Indicator 1: COB com maior número de ocorrências Prioridade 1 - Alta
+    fig1 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_cob_prioridade_alta['COB_nome']} - Top COB</span><br>"
+                    f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
+        },
+        value=top_cob_prioridade_alta["Quantidade"],
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig1.update_layout(template=template)
+
+    # Indicator 2: Município com maior frequência de ocorrências
+    fig2 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_municipio['municipio']} - Top Município</span><br>"
+                    f"<span style='font-size:90%'>Mais frequente</span>"
+        },
+        value=top_municipio["Frequencia"],
+        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_frequencia_municipio, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig2.update_layout(template=template)
+
+    # Indicator 3: Unidade com maior número de ocorrências
+    fig3 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_unidade['UNIDADE']} - Top Unidade</span><br>"
+                    f"<span style='font-size:90%'>Mais Ocorrências</span>"
+        },
+        value=top_unidade["Quantidade"],
+        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_unidade, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig3.update_layout(template=template)
+
+    # Indicator 4: Unidade com maior número de ocorrências Prioridade 1 - Alta
+    fig4 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_unidade_prioridade_alta['UNIDADE']} - Top Unidade</span><br>"
+                    f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
+        },
+        value=top_unidade_prioridade_alta["Quantidade"],
+        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_unidade_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig4.update_layout(template=template)
+
+    # Indicator 5: Unidade com maior número de recursos empenhados
+    fig5 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_recursos['UNIDADE']} - Top Unidade</span><br>"
+                    f"<span style='font-size:90%'>Mais Recursos Empenhados</span>"
+        },
+        value=top_recursos["TotalRecursos"],
+        number={'suffix': " recursos", 'font': {'size': 50}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_recursos, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig5.update_layout(template=template)
+
+    # Indicator 6: Total de recursos existentes
+    fig6 = go.Figure(go.Indicator(
+        mode='number',
+        title={
+            "text": "<span>Total de Recursos Existentes</span><br>"
+        },
+        value=total_recursos_unicos,
+        number={'suffix': " recursos únicos", 'font': {'size': 50}}
+    ))
+    fig6.update_layout(template=template)
+
+
+    # Criação do Gráfico quantidaede de chamadas por COB e Prioridade
+    prioridade_por_cob = df_filtered.groupby(['COB_nome', 'Prioridade_nome'], observed=True).size().reset_index(name='Quantidade')
+    fig7 = px.bar(prioridade_por_cob, x='COB_nome', y='Quantidade', color='Prioridade_nome',
+                    title='Quantidade de Chamadas por Prioridade em cada COB',
+                    labels={'Quantidade': 'Número de Chamadas', 'COB_nome': 'COBs', 'Prioridade_nome': 'Prioridades'},
+                        color_discrete_sequence=['#636EFA', '#FF0000', '#00CC96'])
+    fig7.update_layout(
+        legend_title_text='Prioridades', legend=dict(traceorder='normal'), template=template)
+    
+
+    # Criação de Gráfico de Pizza de Tipo de Prioridade pelo total de ocorrencias
+    # Gráfico de pizza por Prioridade
+    prioridade_total = df_filtered.groupby('Prioridade_nome', observed=True).size().reset_index(name='Quantidade')
+    fig8 = px.pie(
+        prioridade_total, values='Quantidade', names='Prioridade_nome',
+        title='Proporção de Registros por Prioridade',
+        color_discrete_sequence=['#636EFA', '#FF0000', '#00CC96']
+    )
+    fig8.update_layout(template=template)
+    
+    # Criação do Gráfico quantidaede de chamadas por COB e Natureza
+    cob_por_natureza = df_filtered.groupby(['Natureza', 'COB_nome'], observed=True).size().reset_index(name='Quantidade')
+    fig9 = px.bar(cob_por_natureza, x='Natureza', y='Quantidade', color='COB_nome',
+                    title='Quantidade de Chamadas por Natureza em cada COB',
+                    labels={'Quantidade': 'Número de Chamadas', 'Natureza': 'Naturezas', 'COB_nome': 'COBs'},
+                        color_discrete_sequence=px.colors.qualitative.T10, template=template)
+    
+    fig9.update_layout(
+    height=600,  # Aumente a altura do gráfico
+    legend_title_text='COBs',
+    legend=dict(
+        traceorder='normal',
+        orientation="v",
+        yanchor="top",
+        y=1,
+        xanchor="right",
+        x=1.3
+    ),
+    template=template
+    )
+        
+ # Mapa de Prioridades
+    fig_priorities = px.scatter_mapbox(
+        df,
+        lat="latitude",
+        lon="longitude",
+        color="Prioridade_nome",
+        hover_name="local_fato",
+        title="Mapa de Prioridades",
+        labels={"Prioridade_nome": "Prioridade"},
+        color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
+        zoom=10,
+        height=500
+    )
+    fig_priorities.update_layout(
+        mapbox_style="carto-positron",
+        margin={"r": 0, "t": 30, "l": 0, "b": 0},
+        template=template
+    )
+
+    # Mapa de Recursos
+    recursos = []
+    for idx, row in df.iterrows():
+        for recurso in row["recursos_empenhados"].split(" / "):
+            recursos.append({
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "recurso": recurso,
+                "local": row["local_fato"]
+            })
+    df_recursos = pd.DataFrame(recursos)
+
+    fig_resources = px.scatter_mapbox(
+        df_recursos,
+        lat="latitude",
+        lon="longitude",
+        hover_name="recurso",
+        hover_data={"local": True},
+        title="Mapa de Recursos Empenhados",
+        color_discrete_sequence=["#636EFA"],
+        zoom=10,
+        height=500
+    )
+    fig_resources.update_layout(
+        mapbox_style="carto-positron",
+        margin={"r": 0, "t": 30, "l": 0, "b": 0},
+        template=template
+    )
+
+
+
+    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig_priorities, fig_resources
+
+
+# Rodar o servidor ================================================
+if __name__ == "__main__":
+    app.run_server(debug=True)

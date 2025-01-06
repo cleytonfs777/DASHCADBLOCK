@@ -1,0 +1,9 @@
+* {
+    color: #f85408;
+    text-shadow: #f85408;
+}
+
+.form-check-input:checked {
+    background-color: #f85408;
+    border-color: #f85408;
+}

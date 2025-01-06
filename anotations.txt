@@ -1,0 +1,28 @@
+COB com mais ocorrencias prioridade 1
+Município com maior numero de ocorrencias ativas
+Unidade com mais ocorrencia prioridade 1
+Unidade com maior numero de ocorrencias
+Unidade com maior numero de recursos empenhados
+total de recursos empenhados
+
+
+
+
+Quantidade de Ocorrencias Por Prioridade Por COB
+Grafico de Pizza proporção de prioridade por ocorrencias
+
+Quantidade de Ocorrencias Por Natureza Por COB
+
+
+
+Quantidade de Ocorrencias Por Natureza Por Unidade
+Quantidade de Occorencias Por Prioridade por Unidade
+
+Quantidade de Occorencias Por Natureza por Prioridade
+
+
+Grafico de linha com quantidade de ocorrencias por data por COB
+
+
+MAPA de Ocorrencias georreferenciadas com cores distintas por Natureza
+MAPA de Distribuição de Recursos por localidades com painel para o total de recursos
