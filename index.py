@@ -75,10 +75,6 @@ def find_unidade(row):
 df["COB"] = df["unidade_responsavel"].apply(find_cob)
 df["UNIDADE"] = df["unidade_responsavel"].apply(find_unidade)
 
-# EXIBIR OS CAMPOR UNIDADE e unidade_responsável em forma de dataframe
-print("DATAFRAME UNIDADE")
-print(df[["UNIDADE", "unidade_responsavel"]].head(30))
-
 # Extrair o município
 df["municipio"] = df["local_fato"].str.split(" - ").str[-1]
 
@@ -147,10 +143,6 @@ cobs.sort()
 # Criando a coluna 'total_vtr' dinamicamente
 df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
 
-# Conjunto de todas as viaturas únicas
-total_viaturas = set()
-df['recursos_empenhados'].str.split(' / ').apply(total_viaturas.update)
-
 # Layout do Dashboard ================================================
 app.layout = dbc.Container([
 
@@ -160,7 +152,7 @@ app.layout = dbc.Container([
         dbc.Col([
             html.Div([
                 html.Img(src="/assets/bombeiro.png", style={'width': '60px', 'height': '60px'}),
-                html.H2("Painel CAD Período Chuvoso", className="text-center", style={'font-weight': 'bold', 'font-size': '1.1rem'}),
+                html.H2("Painel CAD Período Chuvoso", className="text-center", style={'font-weight': 'bold', 'font-size': '1.3rem'}),
                 ThemeSwitchAIO(aio_id="theme", themes=[url_theme1, url_theme2]),
             ], className="text-center"),
         ], md=4),
@@ -193,26 +185,32 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             dcc.Graph(id="indc_1", style={'height': '150px'})
-        ], md=4),
+        ], md=3),
         dbc.Col([
             dcc.Graph(id="indc_2", style={'height': '150px'})
-        ], md=4),
+        ], md=3),
         dbc.Col([
             dcc.Graph(id="indc_3", style={'height': '150px'})
-        ], md=4),
+        ], md=3),
+        dbc.Col([
+            dcc.Graph(id="indc_7", style={'height': '150px'})
+        ], md=3),
     ], className="mb-2"),
     
     # Segunda linha de indicadores
     dbc.Row([
         dbc.Col([
-            dcc.Graph(id="indc_4", style={'height': '150px'})
-        ], md=4),
-        dbc.Col([
             dcc.Graph(id="indc_5", style={'height': '150px'})
-        ], md=4),
+        ], md=3),
+        dbc.Col([
+            dcc.Graph(id="indc_4", style={'height': '150px'})
+        ], md=3),
         dbc.Col([
             dcc.Graph(id="indc_6", style={'height': '150px'})
-        ], md=4),
+        ], md=3),
+        dbc.Col([
+            dcc.Graph(id="indc_8", style={'height': '150px'})
+        ], md=3),
     ], className="mb-4"),
 
     # Gráfico
@@ -269,6 +267,8 @@ app.layout = dbc.Container([
     Output("indc_4", "figure"),
     Output("indc_5", "figure"),
     Output("indc_6", "figure"),
+    Output("indc_7", "figure"),
+    Output("indc_8", "figure"),
     Output("cob_pri", "figure"),
     Output("pri_pie", "figure"),
     Output("cob_nat", "figure"),
@@ -303,9 +303,6 @@ def line_graph_1(start_date, end_date, cobs, toggle):
 
     # Unidade com maior número de ocorrências
     unidades_ocorrencias = df_filtered.groupby("UNIDADE").size().reset_index(name="Quantidade")
-    print(" Esse é o valor de unidades_ocorrencias", unidades_ocorrencias)
-    print(" Esses são todos os cabeçalhos do dataframe", df_filtered.columns)
-    print(" Esses são todos os valores do dataframe", df_filtered)
     top_unidade = unidades_ocorrencias.loc[unidades_ocorrencias["Quantidade"].idxmax()]
     media_unidade = unidades_ocorrencias["Quantidade"].mean()
 
@@ -319,8 +316,18 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     top_recursos = recursos_empenhados.loc[recursos_empenhados["TotalRecursos"].idxmax()]
     media_recursos = recursos_empenhados["TotalRecursos"].mean()
 
+
+    # ===== Graficos =====
+
+    # Conjunto de todas as viaturas únicas
+    total_viaturas = set()
+    df_filtered['recursos_empenhados'].str.split(' / ').apply(total_viaturas.update)
+
     # Total de recursos existentes
     total_recursos_unicos = len(total_viaturas)
+
+    # Total de Ocorrencias existentes
+    total_ocorrencias = len(df_filtered)
 
     # ===== Indicadores =====
 
@@ -332,7 +339,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
         },
         value=top_cob_prioridade_alta["Quantidade"],
-        number={'suffix': " ocorrências", 'font': {'size': 40}},
+        number={'suffix': " ocorrências", 'font': {'size': 50}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig1.update_layout(template=template)
@@ -390,45 +397,77 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     fig5.update_layout(template=template)
 
     # Indicator 6: Total de recursos existentes
+    # Natureza de Ocorrência que Mais Aparece
+    natureza_freq = df_filtered.groupby("Natureza").size().reset_index(name="Frequencia")
+    top_natureza = natureza_freq.loc[natureza_freq["Frequencia"].idxmax()]
+    media_natureza = natureza_freq["Frequencia"].mean()
+
     fig6 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>{top_natureza['Natureza']} - Top Natureza</span><br>"
+                    f"<span style='font-size:90%'>Natureza mais comum</span>"
+        },
+        value=top_natureza["Frequencia"],
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
+        delta={'relative': True, 'valueformat': '.1%', 'reference': media_natureza, 'position': "bottom", 'font': {'size': 30}}
+    ))
+    fig6.update_layout(template=template)
+
+    # FILE EDIT =============================================================
+
+        # Indicator 5: Unidade com maior número de recursos empenhados
+    fig7 = go.Figure(go.Indicator(
+        mode='number+delta',
+        title={
+            "text": f"<span>Total de Ocorrências Existentes</span>"
+        },
+        value=total_ocorrencias,
+        number={'suffix': " ocorrências", 'font': {'size': 50}},
+    ))
+    fig7.update_layout(template=template)
+
+    # Indicator 6: Total de recursos existentes
+    fig8 = go.Figure(go.Indicator(
         mode='number',
         title={
             "text": "<span>Total de Recursos Existentes</span><br>"
         },
         value=total_recursos_unicos,
-        number={'suffix': " recursos únicos", 'font': {'size': 50}}
+        number={'suffix': " viaturas", 'font': {'size': 50}}
     ))
-    fig6.update_layout(template=template)
+    fig8.update_layout(template=template)
 
+    # FILE EDIT =============================================================
 
     # Criação do Gráfico quantidaede de chamadas por COB e Prioridade
     prioridade_por_cob = df_filtered.groupby(['COB_nome', 'Prioridade_nome'], observed=True).size().reset_index(name='Quantidade')
-    fig7 = px.bar(prioridade_por_cob, x='COB_nome', y='Quantidade', color='Prioridade_nome',
+    fig9 = px.bar(prioridade_por_cob, x='COB_nome', y='Quantidade', color='Prioridade_nome',
                     title='Quantidade de Chamadas por Prioridade em cada COB',
                     labels={'Quantidade': 'Número de Chamadas', 'COB_nome': 'COBs', 'Prioridade_nome': 'Prioridades'},
                         color_discrete_sequence=['#636EFA', '#FF0000', '#00CC96'])
-    fig7.update_layout(
+    fig9.update_layout(
         legend_title_text='Prioridades', legend=dict(traceorder='normal'), template=template)
     
 
     # Criação de Gráfico de Pizza de Tipo de Prioridade pelo total de ocorrencias
     # Gráfico de pizza por Prioridade
     prioridade_total = df_filtered.groupby('Prioridade_nome', observed=True).size().reset_index(name='Quantidade')
-    fig8 = px.pie(
+    fig10 = px.pie(
         prioridade_total, values='Quantidade', names='Prioridade_nome',
         title='Proporção de Registros por Prioridade',
         color_discrete_sequence=['#636EFA', '#FF0000', '#00CC96']
     )
-    fig8.update_layout(template=template)
+    fig10.update_layout(template=template)
     
     # Criação do Gráfico quantidaede de chamadas por COB e Natureza
     cob_por_natureza = df_filtered.groupby(['Natureza', 'COB_nome'], observed=True).size().reset_index(name='Quantidade')
-    fig9 = px.bar(cob_por_natureza, x='Natureza', y='Quantidade', color='COB_nome',
+    fig11 = px.bar(cob_por_natureza, x='Natureza', y='Quantidade', color='COB_nome',
                     title='Quantidade de Chamadas por Natureza em cada COB',
                     labels={'Quantidade': 'Número de Chamadas', 'Natureza': 'Naturezas', 'COB_nome': 'COBs'},
                         color_discrete_sequence=px.colors.qualitative.T10, template=template)
     
-    fig9.update_layout(
+    fig11.update_layout(
     height=600,  # Aumente a altura do gráfico
     legend_title_text='COBs',
     legend=dict(
@@ -492,7 +531,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
 
 
 
-    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig_priorities, fig_resources
+    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig_priorities, fig_resources
 
 
 # Rodar o servidor ================================================
