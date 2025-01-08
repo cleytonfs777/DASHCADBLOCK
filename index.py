@@ -25,6 +25,9 @@ response = requests.get(url)
 
 df = pd.DataFrame(response.json())
 
+print(f"Dados carregados de {url}: {df.head()}")
+
+
 # Otimização do DataFrame
 # Converter colunas com valores repetidos para category
 categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
