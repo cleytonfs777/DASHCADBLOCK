@@ -489,4 +489,6 @@ if __name__ == "__main__":
     app.run_server(host='0.0.0.0', port=port)
 else:
     server = app.server
+    print(f"Server callable: {server}")
+
 
