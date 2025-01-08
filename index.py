@@ -72,9 +72,9 @@ cobs.sort()
 # Criando a coluna 'total_vtr' dinamicamente
 df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
 # Retorna os dados processados como uma lista de dicionários
-if df.isnull().values.any():
-    print("Valores nulos encontrados:")
-    print(df.isnull().sum())
+# if df.isnull().values.any():
+#     print("Valores nulos encontrados:")
+#     print(df.isnull().sum())
 
 # Configuração do Dash (Stylesheet e título) ==========================
 app = dash.Dash(
@@ -487,3 +487,6 @@ def line_graph_1(start_date, end_date, cobs, toggle):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run_server(host='0.0.0.0', port=port)
+else:
+    server = app.server
+
