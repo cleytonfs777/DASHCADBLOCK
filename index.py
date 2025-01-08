@@ -6,92 +6,24 @@ import pandas as pd
 from dash_bootstrap_templates import ThemeSwitchAIO
 import plotly.graph_objects as go
 import json
+import requests
+import os
+from dotenv import load_dotenv
 
-
-# Configuração do Dash (Stylesheet e título) ==========================
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.VAPOR, dbc.themes.FLATLY])
-app.title = "Dashboard de Ocorrências - CBMMG"
-template_theme1 = "vapor"
-template_theme2 = "flatly"
-url_theme1 = dbc.themes.VAPOR
-url_theme2 = dbc.themes.FLATLY
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # Inputs importantes
-
-
-# Funções Auxiliares ================================================
 
 # Função para calcular o total de viaturas únicas em cada linha
 def calcular_total_vtr(linha):
     return len(set(linha.split(' / ')))
 
 # Reading Data =======================================================
-# Carregar dados
-df = pd.read_json("resposta.json")  # Substitua pelo caminho correto do arquivo
+url = os.environ.get("URL_API")
+response = requests.get(url)
 
-
-# Cria as colunas data e hora e remove a coluna data_criacao
-df["data"] = pd.to_datetime(df["data_criacao"], format="%d/%m/%Y %H:%M:%S").dt.strftime("%d/%m/%Y")
-df["hora"] = pd.to_datetime(df["data_criacao"], format="%d/%m/%Y %H:%M:%S").dt.strftime("%H:%M")
-df.drop(columns="data_criacao", inplace=True)
-
-
-# Cria mapa de correspondencia de cob e unidade
-# Mapas de correspondência
-cob_map = {
-    "1COB": ["1BBM", "2BBM", "3BBM", "10BBM", "5CIA IND", "1COB"],
-    "2COB": ["5BBM", "8BBM", "12BBM", "2COB"],
-    "3COB": ["4BBM", "2CIA IND", "3COB"],
-    "4COB": ["7BBM", "6CIA IND", "4COB"],
-    "5COB": ["6BBM", "11BBM", "5COB"],
-    "6COB": ["9BBM", "1CIA IND", "7CIA IND", "6COB"]
-}
-
-unidade_map = {
-    "1BBM": "1BBM", "2BBM": "2BBM", "3BBM": "3BBM", "10BBM": "10BBM",
-    "5CIA IND": "5CIA IND", "5BBM": "5º BBM", "8BBM": "8BBM", "12BBM": "12BBM",
-    "4BBM": "4BBM", "2CIA IND": "2CIA IND", "7BBM": "7BBM", "6CIA IND": "6CIA IND",
-    "6BBM": "6BBM", "11BBM": "11BBM", "5COB": "5COB", "9BBM": "9BBM",
-    "1CIA IND": "1CIA IND", "7CIA IND": "7CIA IND",
-    "1COB": "1ºCOB - RMBH/Divinóplis",
-}
-
-# Função para encontrar COB
-def find_cob(row):
-    for cob, valores in cob_map.items():
-        if any(item in row for item in valores):
-            return cob
-    return ""
-
-# Função para encontrar UNIDADE
-def find_unidade(row):
-    for unidade, valor in unidade_map.items():
-        if unidade in row:
-            return valor
-    return ""
-
-
-# Aplicar as funções para criar as colunas
-df["COB"] = df["unidade_responsavel"].apply(find_cob)
-df["UNIDADE"] = df["unidade_responsavel"].apply(find_unidade)
-
-# Extrair o município
-df["municipio"] = df["local_fato"].str.split(" - ").str[-1]
-
-# Criar a coluna 'Natureza' com a regex ajustada
-df["Natureza"] = df["natureza"].str.extract(r"^(.\d{5} - [A-Z ]+)")
-
-# Criar a coluna 'Prioridade'
-df["Prioridade"] = df["natureza"].str.extract(r"Prioridade: (\d)")
-
-# Transformar Prioridade em String
-df['Prioridade'] = df['Prioridade'].astype(str)
-
-# Remover a coluna original 'natureza'
-df.drop(columns=["natureza"], inplace=True)
-
-# Remover as colunas indesejadas
-df = df.drop(columns=["unidade_responsavel", "alerta", "destaque", "envolve_autoridade", "situacao", "data_situacao_atual"])
+df = pd.DataFrame(response.json())
 
 # Otimização do DataFrame
 # Converter colunas com valores repetidos para category
@@ -106,13 +38,10 @@ df["longitude"] = df["longitude"].astype("float32")
 # Converter a coluna data para datetime
 df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
 
-# Converter a coluna 'data' de Unix timestamp para formato de data legível
-df["data"] = pd.to_datetime(df["data"], unit="ms")
-
 # Configurar valores iniciais e finais para o filtro de data
 data_min = df["data"].min().date()
 data_max = df["data"].max().date()
-
+    
 ### PREPARANDO PARA GERAR GRAFICOS
 # Dicionário para mapear os valores de COB para os nomes das regiões
 cob_legend = {
@@ -142,6 +71,22 @@ cobs.sort()
 
 # Criando a coluna 'total_vtr' dinamicamente
 df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
+# Retorna os dados processados como uma lista de dicionários
+if df.isnull().values.any():
+    print("Valores nulos encontrados:")
+    print(df.isnull().sum())
+
+# Configuração do Dash (Stylesheet e título) ==========================
+app = dash.Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.VAPOR, dbc.themes.FLATLY],
+)
+app.title = "Dashboard de Ocorrências - CBMMG"
+template_theme1 = "vapor"
+template_theme2 = "flatly"
+url_theme1 = dbc.themes.VAPOR
+url_theme2 = dbc.themes.FLATLY
+
 
 # Layout do Dashboard ================================================
 app.layout = dbc.Container([
@@ -352,7 +297,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
         },
         value=top_cob_prioridade_alta["Quantidade"],
-        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig1.update_layout(template=template)
@@ -365,7 +310,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Mais frequente</span>"
         },
         value=top_municipio["Frequencia"],
-        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_frequencia_municipio, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig2.update_layout(template=template)
@@ -378,7 +323,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Mais Ocorrências</span>"
         },
         value=top_unidade["Quantidade"],
-        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_unidade, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig3.update_layout(template=template)
@@ -391,7 +336,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
         },
         value=top_unidade_prioridade_alta["Quantidade"],
-        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_unidade_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig4.update_layout(template=template)
@@ -404,7 +349,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
                     f"<span style='font-size:90%'>Mais Recursos Empenhados</span>"
         },
         value=top_recursos["TotalRecursos"],
-        number={'suffix': " recursos", 'font': {'size': 50}},
+        number={'suffix': " recursos", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_recursos, 'position': "bottom", 'font': {'size': 30}}
     ))
     fig5.update_layout(template=template)
@@ -436,7 +381,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
             "text": f"<span>Total de Ocorrências Existentes</span>"
         },
         value=total_ocorrencias,
-        number={'suffix': " ocorrências", 'font': {'size': 50}},
+        number={'suffix': " ocorrências", 'font': {'size': 40}},
     ))
     fig7.update_layout(template=template)
 
@@ -447,7 +392,7 @@ def line_graph_1(start_date, end_date, cobs, toggle):
             "text": "<span>Total de Recursos Existentes</span><br>"
         },
         value=total_recursos_unicos,
-        number={'suffix': " viaturas", 'font': {'size': 50}}
+        number={'suffix': " viaturas", 'font': {'size': 40}}
     ))
     fig8.update_layout(template=template)
 
@@ -540,4 +485,5 @@ def line_graph_1(start_date, end_date, cobs, toggle):
 
 # Rodar o servidor ================================================
 if __name__ == "__main__":
-    app.run_server(debug=True, host="0.0.0.0", port=8050)
+    port = int(os.environ.get("PORT", 8080))
+    app.run_server(host='0.0.0.0', port=port)
