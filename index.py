@@ -13,71 +13,82 @@ from dotenv import load_dotenv
 # Carregar variáveis de ambiente
 load_dotenv()
 
-# Inputs importantes
+# Inicializar variáveis globais
+df = None
+data_loaded = False
+cobs = None
 
 # Função para calcular o total de viaturas únicas em cada linha
 def calcular_total_vtr(linha):
     return len(set(linha.split(' / ')))
 
-# Reading Data =======================================================
-url = os.environ.get("URL_API")
-response = requests.get(url)
+# Função para carregar e processar os dados da API
+def load_data():
 
-df = pd.DataFrame(response.json())
+    global df, data_loaded, cobs
 
-print(f"Dados carregados de {url}: {df.head()}")
+    # Reading Data =======================================================
+    url = os.environ.get("URL_API")
+    response = requests.get(url)
+
+    df = pd.DataFrame(response.json())
+
+    # Otimização do DataFrame
+    # Converter colunas com valores repetidos para category
+    categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
+    for col in categorical_columns:
+        df[col] = df[col].astype("category")
+
+    # Converter latitude e longitude para float32
+    df["latitude"] = df["latitude"].astype("float32")
+    df["longitude"] = df["longitude"].astype("float32")
+
+    # Converter a coluna data para datetime
+    df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
+        
+    ### PREPARANDO PARA GERAR GRAFICOS
+    # Dicionário para mapear os valores de COB para os nomes das regiões
+    cob_legend = {
+        '1COB': '1ºCOB - RMBH/Divinóplis',
+        '2COB': '2ºCOB - Uberlândia',
+        '3COB': '3ºCOB - Juiz de Fora',
+        '4COB': '4ºCOB - Montes Claros',
+        '5COB': '5ºCOB - Governador Valadares',
+        '6COB': '6ºCOB - Varginha'
+    }
+
+    df['COB_nome'] = df['COB'].map(cob_legend)
+
+    print(df.head())
+    print("Resultado de COB_nome:")
+    print(df["COB_nome"].head())
 
 
-# Otimização do DataFrame
-# Converter colunas com valores repetidos para category
-categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
-for col in categorical_columns:
-    df[col] = df[col].astype("category")
+    # Mapear Prioridades
+    priori_legend = {
+        '1': 'Prioridade 1 - Alta',
+        '2': 'Prioridade 2 - Média',
+        '3': 'Prioridade 3 - Baixa'
+    }
 
-# Converter latitude e longitude para float32
-df["latitude"] = df["latitude"].astype("float32")
-df["longitude"] = df["longitude"].astype("float32")
+    df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
 
-# Converter a coluna data para datetime
-df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
+    # Lista de Cobs Unica e Ordenada
+    cobs = list(df["COB_nome"].unique())
+    cobs.sort()
+
+    # Criando a coluna 'total_vtr' dinamicamente
+    df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
+    # Retorna os dados processados como uma lista de dicionários
+    # if df.isnull().values.any():
+    #     print("Valores nulos encontrados:")
+    #     print(df.isnull().sum())
+
+load_data()
 
 # Configurar valores iniciais e finais para o filtro de data
 data_min = df["data"].min().date()
 data_max = df["data"].max().date()
-    
-### PREPARANDO PARA GERAR GRAFICOS
-# Dicionário para mapear os valores de COB para os nomes das regiões
-cob_legend = {
-    '1COB': '1ºCOB - RMBH/Divinóplis',
-    '2COB': '2ºCOB - Uberlândia',
-    '3COB': '3ºCOB - Juiz de Fora',
-    '4COB': '4ºCOB - Montes Claros',
-    '5COB': '5ºCOB - Governador Valadares',
-    '6COB': '6ºCOB - Varginha'
-}
-
-df['COB_nome'] = df['COB'].map(cob_legend)
-
-
-# Mapear Prioridades
-priori_legend = {
-    '1': 'Prioridade 1 - Alta',
-    '2': 'Prioridade 2 - Média',
-    '3': 'Prioridade 3 - Baixa'
-}
-
-df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
-
-# Lista de Cobs Unica e Ordenada
-cobs = list(df["COB_nome"].unique())
-cobs.sort()
-
-# Criando a coluna 'total_vtr' dinamicamente
-df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
-# Retorna os dados processados como uma lista de dicionários
-# if df.isnull().values.any():
-#     print("Valores nulos encontrados:")
-#     print(df.isnull().sum())
 
 # Configuração do Dash (Stylesheet e título) ==========================
 app = dash.Dash(
@@ -197,18 +208,28 @@ app.layout = dbc.Container([
                     config={"scrollZoom": True}
                 )
             ])
-        ], md=6),
-        dbc.Col([
-            html.Div([
-                html.H2("Mapa de Recursos Empenhados", className="text-center", style={'font-weight': 'bold'}),
-                dcc.Graph(
-                    id="map_resources",
-                    config={"scrollZoom": True}
-                )
-            ])
-        ], md=6)
-    ])
+        ])
+    ]),
+    dcc.Interval(id="interval-update", interval=60*60*1000, n_intervals=0)
 ], fluid=True)
+
+# Função para carregar dados da API
+def load_data():
+    global df, data_loaded
+    try:
+        url = os.environ.get("URL_API")
+        response = requests.get(url)
+        df = pd.DataFrame(response.json())
+
+        # Processamento adicional do DataFrame (ajustar conforme sua lógica)
+        df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
+        df["latitude"] = df["latitude"].astype("float32")
+        df["longitude"] = df["longitude"].astype("float32")
+        data_loaded = True
+        # print(f"Dados carregados de {url}: {df.head()}")
+    except Exception as e:
+        data_loaded = False
+        print(f"Erro ao carregar os dados: {e}")
 
 # Callbacks =========================================================
 @app.callback(
@@ -224,18 +245,58 @@ app.layout = dbc.Container([
     Output("pri_pie", "figure"),
     Output("cob_nat", "figure"),
     Output("map_priorities", "figure"),
-    Output("map_resources", "figure"),
     Input("date-filter", "start_date"),
     Input("date-filter", "end_date"),
     Input("cob-filter", "value"),
+    Input("interval-update", "n_intervals"),
     Input(ThemeSwitchAIO.ids.switch("theme"), "value"),
 )
-def line_graph_1(start_date, end_date, cobs, toggle):
-    template = template_theme1 if toggle else template_theme2
+def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
+
+    global df
+
+    print("Colunas em df:", df.columns)
+
+    # Copia profunda do DataFrame
+    df_filtered = df.copy(deep=True)
+
+    # Filtro de data
+    if start_date and end_date:
+        mask = (df_filtered["data"] >= start_date) & (df_filtered["data"] <= end_date)
+        df_filtered = df_filtered.loc[mask]
+
+    # Recriar a coluna 'COB_nome' se necessário
+    if 'COB_nome' not in df_filtered.columns:
+        print("Recriando a coluna 'COB_nome'")
+        df_filtered['COB_nome'] = df_filtered['COB'].map({
+            '1COB': '1ºCOB - RMBH/Divinóplis',
+            '2COB': '2ºCOB - Uberlândia',
+            '3COB': '3ºCOB - Juiz de Fora',
+            '4COB': '4ºCOB - Montes Claros',
+            '5COB': '5ºCOB - Governador Valadares',
+            '6COB': '6ºCOB - Varginha'
+        })
+
+    print("Colunas em df_filtered:", df_filtered.columns)
+
+    # Filtro de COBs
+    if cobs:
+        df_filtered = df_filtered[df_filtered["COB_nome"].isin(cobs)]
+
+    # Verificar novamente a presença de 'COB_nome'
+    if 'COB_nome' not in df_filtered.columns:
+        print("Erro: Coluna 'COB_nome' ausente após o processamento.")
+        return [go.Figure().update_layout(title="Erro: Coluna 'COB_nome' não encontrada.")] * 12
+
+
+
     # Copia profunda do Dataframe
     df_filtered = df.copy(deep=True)
     mask = (df_filtered["data"] >= start_date) & (df_filtered["data"] <= end_date)
     df_filtered = df_filtered.loc[mask]
+
+    template = template_theme1 if toggle else template_theme2
+
 
     if cobs:
         df_filtered = df_filtered[df_filtered["COB_nome"].isin(cobs)]
@@ -443,19 +504,25 @@ def line_graph_1(start_date, end_date, cobs, toggle):
     )
         
  # Mapa de Prioridades
- # Mapa de Prioridades
     fig_priorities = px.scatter_mapbox(
-        df,
-        lat="latitude",
-        lon="longitude",
-        color="Prioridade_nome",
-        hover_name="local_fato",
-        title="Mapa de Prioridades",
-        labels={"Prioridade_nome": "Prioridade"},
-        color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
-        zoom=6,
-        height=600
+    df,
+    lat="latitude",
+    lon="longitude",
+    color="Prioridade_nome",
+    hover_name="local_fato",
+    title="Mapa de Prioridades",
+    labels={"Prioridade_nome": "Prioridade"},
+    color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
+    zoom=6,
+    height=600,
+    hover_data={
+        "Natureza": True,  # Exibe a coluna Natureza no hover
+        "local_fato": False,  # Já incluído como hover_name
+        "latitude": True,  # Exclui a latitude do hover
+        "longitude": True,  # Exclui a longitude do hover
+    }
     )
+
     fig_priorities.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
     fig_priorities.update_layout(
         mapbox_style="carto-positron",
@@ -463,27 +530,9 @@ def line_graph_1(start_date, end_date, cobs, toggle):
         template=template
     )
 
-    # Mapa de Recursos
-    fig_resources = px.scatter_mapbox(
-        df_recursos,
-        lat="latitude",
-        lon="longitude",
-        hover_name="recurso",
-        hover_data={"local": True},
-        title="Mapa de Recursos Empenhados",
-        color_discrete_sequence=["#636EFA"],
-        zoom=6,
-        height=600
-    )
-    fig_resources.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
-    fig_resources.update_layout(
-        mapbox_style="carto-positron",
-        margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        template=template
-    )
 
 
-    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig_priorities, fig_resources
+    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig_priorities
 
 
 # Rodar o servidor ================================================
