@@ -74,8 +74,9 @@ def load_data():
     df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
 
     # Lista de Cobs Unica e Ordenada
-    cobs = list(df["COB_nome"].unique())
+    cobs = list(df["COB_nome"].dropna().astype(str).unique())  # Remove NaN e converte para string
     cobs.sort()
+
 
     # Criando a coluna 'total_vtr' dinamicamente
     df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
@@ -210,7 +211,7 @@ app.layout = dbc.Container([
             ])
         ])
     ]),
-    dcc.Interval(id="interval-update", interval=60*60*1000, n_intervals=0)
+    dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0)
 ], fluid=True)
 
 # Função para carregar dados da API
