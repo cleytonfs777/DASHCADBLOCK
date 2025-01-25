@@ -211,7 +211,7 @@ app.layout = dbc.Container([
             ])
         ])
     ]),
-    dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0)
+    dcc.Interval(id="interval-update", interval=4*60*60*1000, n_intervals=0) # Atualizar a cada 4 horas
 ], fluid=True)
 
 # Função para carregar dados da API
