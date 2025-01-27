@@ -253,8 +253,6 @@ def load_data():
 )
 def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
-    global df
-
     url = os.environ.get("URL_API")
     response = requests.get(url)
 
