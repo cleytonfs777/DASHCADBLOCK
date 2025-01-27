@@ -200,17 +200,17 @@ app.layout = dbc.Container([
     ], className="align-items-center mb-4"),
 
     # Mapas de Prioridades e Recursos =================================
-    dbc.Row([
-        dbc.Col([
-            html.Div([
-                html.H2("Mapa de Prioridades", className="text-center", style={'font-weight': 'bold'}),
-                dcc.Graph(
-                    id="map_priorities",
-                    config={"scrollZoom": True}
-                )
-            ])
-        ])
-    ]),
+    # dbc.Row([
+    #     dbc.Col([
+    #         html.Div([
+    #             html.H2("Mapa de Prioridades", className="text-center", style={'font-weight': 'bold'}),
+    #             dcc.Graph(
+    #                 id="map_priorities",
+    #                 config={"scrollZoom": True}
+    #             )
+    #         ])
+    #     ])
+    # ]),
     dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0) # Atualizar a cada 4 horas
 ], fluid=True)
 
@@ -245,7 +245,7 @@ def load_data():
     Output("cob_pri", "figure"),
     Output("pri_pie", "figure"),
     Output("cob_nat", "figure"),
-    Output("map_priorities", "figure"),
+    #Output("map_priorities", "figure"),
     Input("date-filter", "start_date"),
     Input("date-filter", "end_date"),
     Input("cob-filter", "value"),
@@ -505,35 +505,35 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
     )
         
  # Mapa de Prioridades
-    fig_priorities = px.scatter_mapbox(
-    df,
-    lat="latitude",
-    lon="longitude",
-    color="Prioridade_nome",
-    hover_name="local_fato",
-    title="Mapa de Prioridades",
-    labels={"Prioridade_nome": "Prioridade"},
-    color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
-    zoom=6,
-    height=600,
-    hover_data={
-        "Natureza": True,  # Exibe a coluna Natureza no hover
-        "local_fato": False,  # Já incluído como hover_name
-        "latitude": True,  # Exclui a latitude do hover
-        "longitude": True,  # Exclui a longitude do hover
-    }
-    )
+    # fig_priorities = px.scatter_mapbox(
+    # df,
+    # lat="latitude",
+    # lon="longitude",
+    # color="Prioridade_nome",
+    # hover_name="local_fato",
+    # title="Mapa de Prioridades",
+    # labels={"Prioridade_nome": "Prioridade"},
+    # color_discrete_sequence=["#FF0000", "#FFA500", "#00FF00"],
+    # zoom=6,
+    # height=600,
+    # hover_data={
+    #     "Natureza": True,  # Exibe a coluna Natureza no hover
+    #     "local_fato": False,  # Já incluído como hover_name
+    #     "latitude": True,  # Exclui a latitude do hover
+    #     "longitude": True,  # Exclui a longitude do hover
+    # }
+    # )
 
-    fig_priorities.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
-    fig_priorities.update_layout(
-        mapbox_style="carto-positron",
-        margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        template=template
-    )
+    # fig_priorities.update_traces(marker=dict(size=12))  # Ajuste do tamanho dos pontos
+    # fig_priorities.update_layout(
+    #     mapbox_style="carto-positron",
+    #     margin={"r": 0, "t": 30, "l": 0, "b": 0},
+    #     template=template
+    # )
 
 
 
-    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig_priorities
+    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11 #, fig_priorities
 
 
 # Rodar o servidor ================================================
