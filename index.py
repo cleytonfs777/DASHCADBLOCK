@@ -85,7 +85,6 @@ def load_data():
     #     print("Valores nulos encontrados:")
     #     print(df.isnull().sum())
 
-
 load_data()
 
 # Configurar valores iniciais e finais para o filtro de data
@@ -200,6 +199,18 @@ app.layout = dbc.Container([
 
     ], className="align-items-center mb-4"),
 
+    # Mapas de Prioridades e Recursos =================================
+    # dbc.Row([
+    #     dbc.Col([
+    #         html.Div([
+    #             html.H2("Mapa de Prioridades", className="text-center", style={'font-weight': 'bold'}),
+    #             dcc.Graph(
+    #                 id="map_priorities",
+    #                 config={"scrollZoom": True}
+    #             )
+    #         ])
+    #     ])
+    # ]),
     dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0) # Atualizar a cada 4 horas
 ], fluid=True)
 
@@ -242,7 +253,9 @@ def load_data():
 )
 def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
-    load_data()
+    global df
+
+    print("Colunas em df:", df.columns)
 
     # Copia profunda do DataFrame
     df_filtered = df.copy(deep=True)
