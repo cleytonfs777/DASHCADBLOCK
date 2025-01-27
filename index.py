@@ -85,7 +85,6 @@ def load_data():
     #     print("Valores nulos encontrados:")
     #     print(df.isnull().sum())
 
-    return df
 
 load_data()
 
@@ -243,12 +242,10 @@ def load_data():
 )
 def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
-    df = load_data()
-
-    print("Colunas em df:", df.columns)
+    load_data()
 
     # Copia profunda do DataFrame
-    df_filtered = df.copy()
+    df_filtered = df.copy(deep=True)
 
     # Filtro de data
     if start_date and end_date:
