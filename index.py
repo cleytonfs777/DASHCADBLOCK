@@ -23,58 +23,61 @@ def calcular_total_vtr(linha):
     return len(set(linha.split(' / ')))
 
 # Função para carregar e processar os dados da API
-def load_data():
+# Função para carregar e processar os dados da API
+def load_data(force_reload=False):
+    global df, cobs, data_loaded
 
-    global df, data_loaded, cobs
+    # Se `force_reload=True`, força a atualização dos dados
+    if force_reload or not data_loaded:
+        url = os.environ.get("URL_API")
+        headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        }
+        response = requests.get(url, headers=headers)
 
-    # Reading Data =======================================================
-    url = os.environ.get("URL_API")
-    response = requests.get(url)
+        df = pd.DataFrame(response.json())
 
-    df = pd.DataFrame(response.json())
+        # Converter colunas com valores repetidos para category
+        categorical_columns = ["Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
+        for col in categorical_columns:
+            df[col] = df[col].astype("category")
 
-    # Otimização do DataFrame
-    # Converter colunas com valores repetidos para category
-    categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
-    for col in categorical_columns:
-        df[col] = df[col].astype("category")
+        # Converter latitude e longitude para float32
+        df["latitude"] = df["latitude"].astype("float32")
+        df["longitude"] = df["longitude"].astype("float32")
 
-    # Converter latitude e longitude para float32
-    df["latitude"] = df["latitude"].astype("float32")
-    df["longitude"] = df["longitude"].astype("float32")
+        # Converter a coluna data para datetime
+        df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
 
-    # Converter a coluna data para datetime
-    df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
-        
-    ### PREPARANDO PARA GERAR GRAFICOS
-    # Dicionário para mapear os valores de COB para os nomes das regiões
-    cob_legend = {
-        '1COB': '1ºCOB - RMBH/Divinóplis',
-        '2COB': '2ºCOB - Uberlândia',
-        '3COB': '3ºCOB - Juiz de Fora',
-        '4COB': '4ºCOB - Montes Claros',
-        '5COB': '5ºCOB - Governador Valadares',
-        '6COB': '6ºCOB - Varginha'
-    }
+        # Mapear COBs e Prioridades
+        cob_legend = {
+            '1COB': '1ºCOB - RMBH/Divinóplis',
+            '2COB': '2ºCOB - Uberlândia',
+            '3COB': '3ºCOB - Juiz de Fora',
+            '4COB': '4ºCOB - Montes Claros',
+            '5COB': '5ºCOB - Governador Valadares',
+            '6COB': '6ºCOB - Varginha'
+        }
+        df['COB_nome'] = df['COB'].map(cob_legend)
 
-    df['COB_nome'] = df['COB'].map(cob_legend)
+        priori_legend = {
+            '1': 'Prioridade 1 - Alta',
+            '2': 'Prioridade 2 - Média',
+            '3': 'Prioridade 3 - Baixa'
+        }
+        df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
 
-    # Mapear Prioridades
-    priori_legend = {
-        '1': 'Prioridade 1 - Alta',
-        '2': 'Prioridade 2 - Média',
-        '3': 'Prioridade 3 - Baixa'
-    }
+        # Criando a coluna 'total_vtr'
+        df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
 
-    df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
+        # Lista de Cobs Única e Ordenada
+        cobs = sorted(df["COB_nome"].dropna().astype(str).unique())
 
-    # Lista de Cobs Unica e Ordenada
-    cobs = list(df["COB_nome"].dropna().astype(str).unique())  # Remove NaN e converte para string
-    cobs.sort()
+        # Atualizar estado
+        data_loaded = True
 
-
-    # Criando a coluna 'total_vtr' dinamicamente
-    df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
 
 load_data()
 
@@ -227,11 +230,12 @@ app.layout = dbc.Container([
 )
 def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
-    global df
+    print(f"🔄 Atualizando dados... Intervalo: {n_intervals}")
 
-    load_data()
+    # Agora os dados sempre serão recarregados corretamente
+    load_data(True)
 
-    # Copia profunda do DataFrame
+    # Criar uma cópia profunda para evitar modificações na variável global
     df_filtered = df.copy(deep=True)
 
     # Filtro de data
@@ -288,12 +292,12 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
         media_prioridade_alta = 0
 
     # Município com maior frequência de ocorrências
-    municipios_frequencia = df_filtered.groupby("municipio").size().reset_index(name="Frequencia")
+    municipios_frequencia = df_filtered.groupby("municipio", observed=True).size().reset_index(name="Frequencia")
     top_municipio = municipios_frequencia.loc[municipios_frequencia["Frequencia"].idxmax()]
     media_frequencia_municipio = municipios_frequencia["Frequencia"].mean()
 
     # Unidade com maior número de ocorrências
-    unidades_ocorrencias = df_filtered.groupby("UNIDADE").size().reset_index(name="Quantidade")
+    unidades_ocorrencias = df_filtered.groupby("UNIDADE", observed=True).size().reset_index(name="Quantidade")
     top_unidade = unidades_ocorrencias.loc[unidades_ocorrencias["Quantidade"].idxmax()]
     media_unidade = unidades_ocorrencias["Quantidade"].mean()
 
@@ -313,7 +317,7 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
         media_unidade_prioridade_alta = 0
 
     # Unidade com maior número de recursos empenhados
-    recursos_empenhados = df_filtered.groupby("UNIDADE")["total_vtr"].sum().reset_index(name="TotalRecursos")
+    recursos_empenhados = df_filtered.groupby("UNIDADE", observed=True)["total_vtr"].sum().reset_index(name="TotalRecursos")
     top_recursos = recursos_empenhados.loc[recursos_empenhados["TotalRecursos"].idxmax()]
     media_recursos = recursos_empenhados["TotalRecursos"].mean()
 
@@ -410,7 +414,7 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
     # Indicator 6: Total de recursos existentes
     # Natureza de Ocorrência que Mais Aparece
-    natureza_freq = df_filtered.groupby("Natureza").size().reset_index(name="Frequencia")
+    natureza_freq = df_filtered.groupby("Natureza", observed=True).size().reset_index(name="Frequencia")
     top_natureza = natureza_freq.loc[natureza_freq["Frequencia"].idxmax()]
     media_natureza = natureza_freq["Frequencia"].mean()
 
