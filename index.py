@@ -107,7 +107,7 @@ app.layout = dbc.Container([
             html.Div([
                 html.Img(src="/assets/bombeiro.png", style={'width': '60px', 'height': '60px'}),
                 html.H2("Painel CAD Período Chuvoso", className="text-center", style={'font-weight': 'bold', 'font-size': '1.3rem'}),
-                ThemeSwitchAIO(aio_id="theme", themes=[url_theme1, url_theme2]),
+                ThemeSwitchAIO(aio_id="theme", themes=[url_theme2, url_theme1]),
             ], className="text-center"),
         ], md=4),
 
