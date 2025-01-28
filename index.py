@@ -211,26 +211,8 @@ app.layout = dbc.Container([
     #         ])
     #     ])
     # ]),
-    dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0) # Atualizar a cada 4 horas
+    dcc.Interval(id="interval-update", interval=60*1000, n_intervals=0) # Atualizar a cada 1 min
 ], fluid=True)
-
-# Função para carregar dados da API
-def load_data():
-    global df, data_loaded
-    try:
-        url = os.environ.get("URL_API")
-        response = requests.get(url)
-        df = pd.DataFrame(response.json())
-
-        # Processamento adicional do DataFrame (ajustar conforme sua lógica)
-        df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
-        df["latitude"] = df["latitude"].astype("float32")
-        df["longitude"] = df["longitude"].astype("float32")
-        data_loaded = True
-        # print(f"Dados carregados de {url}: {df.head()}")
-    except Exception as e:
-        data_loaded = False
-        print(f"Erro ao carregar os dados: {e}")
 
 # Callbacks =========================================================
 @app.callback(
@@ -245,6 +227,7 @@ def load_data():
     Output("cob_pri", "figure"),
     Output("pri_pie", "figure"),
     Output("cob_nat", "figure"),
+    #Output("map_priorities", "figure"),
     Input("date-filter", "start_date"),
     Input("date-filter", "end_date"),
     Input("cob-filter", "value"),
@@ -253,62 +236,9 @@ def load_data():
 )
 def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
-    url = os.environ.get("URL_API")
-    response = requests.get(url)
+    global df
 
-    df = pd.DataFrame(response.json())
-
-    # Otimização do DataFrame
-    # Converter colunas com valores repetidos para category
-    categorical_columns = [ "Natureza", "Prioridade", "tipo_classificacao", "COB", "UNIDADE", "municipio"]
-    for col in categorical_columns:
-        df[col] = df[col].astype("category")
-
-    # Converter latitude e longitude para float32
-    df["latitude"] = df["latitude"].astype("float32")
-    df["longitude"] = df["longitude"].astype("float32")
-
-    # Converter a coluna data para datetime
-    df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
-        
-    ### PREPARANDO PARA GERAR GRAFICOS
-    # Dicionário para mapear os valores de COB para os nomes das regiões
-    cob_legend = {
-        '1COB': '1ºCOB - RMBH/Divinóplis',
-        '2COB': '2ºCOB - Uberlândia',
-        '3COB': '3ºCOB - Juiz de Fora',
-        '4COB': '4ºCOB - Montes Claros',
-        '5COB': '5ºCOB - Governador Valadares',
-        '6COB': '6ºCOB - Varginha'
-    }
-
-    df['COB_nome'] = df['COB'].map(cob_legend)
-
-    print(df.head())
-    print("Resultado de COB_nome:")
-    print(df["COB_nome"].head())
-
-
-    # Mapear Prioridades
-    priori_legend = {
-        '1': 'Prioridade 1 - Alta',
-        '2': 'Prioridade 2 - Média',
-        '3': 'Prioridade 3 - Baixa'
-    }
-
-    df['Prioridade_nome'] = df['Prioridade'].map(priori_legend)
-
-    # Lista de Cobs Unica e Ordenada
-    cobs = list(df["COB_nome"].dropna().astype(str).unique())  # Remove NaN e converte para string
-    cobs.sort()
-
-
-    # Criando a coluna 'total_vtr' dinamicamente
-    df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
-    # Retorna os dados processados como uma lista de dicionários
-    # if df.isnull().values.any():
-    #     print("Valores nulos encontrados:")
-    #     print(df.isnull().sum())
+    load_data()
 
     print("Colunas em df:", df.columns)
 
@@ -559,10 +489,7 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
     )
         
 
-
-
-    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11 #, fig_priorities
-
+    return fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11 
 
 # Rodar o servidor ================================================
 if __name__ == "__main__":
