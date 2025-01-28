@@ -59,11 +59,6 @@ def load_data():
 
     df['COB_nome'] = df['COB'].map(cob_legend)
 
-    print(df.head())
-    print("Resultado de COB_nome:")
-    print(df["COB_nome"].head())
-
-
     # Mapear Prioridades
     priori_legend = {
         '1': 'Prioridade 1 - Alta',
@@ -80,10 +75,6 @@ def load_data():
 
     # Criando a coluna 'total_vtr' dinamicamente
     df['total_vtr'] = df['recursos_empenhados'].apply(calcular_total_vtr)
-    # Retorna os dados processados como uma lista de dicionários
-    # if df.isnull().values.any():
-    #     print("Valores nulos encontrados:")
-    #     print(df.isnull().sum())
 
 load_data()
 
@@ -240,8 +231,6 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
     load_data()
 
-    print("Colunas em df:", df.columns)
-
     # Copia profunda do DataFrame
     df_filtered = df.copy(deep=True)
 
@@ -252,7 +241,6 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
     # Recriar a coluna 'COB_nome' se necessário
     if 'COB_nome' not in df_filtered.columns:
-        print("Recriando a coluna 'COB_nome'")
         df_filtered['COB_nome'] = df_filtered['COB'].map({
             '1COB': '1ºCOB - RMBH/Divinóplis',
             '2COB': '2ºCOB - Uberlândia',
@@ -262,15 +250,12 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
             '6COB': '6ºCOB - Varginha'
         })
 
-    print("Colunas em df_filtered:", df_filtered.columns)
-
     # Filtro de COBs
     if cobs:
         df_filtered = df_filtered[df_filtered["COB_nome"].isin(cobs)]
 
     # Verificar novamente a presença de 'COB_nome'
     if 'COB_nome' not in df_filtered.columns:
-        print("Erro: Coluna 'COB_nome' ausente após o processamento.")
         return [go.Figure().update_layout(title="Erro: Coluna 'COB_nome' não encontrada.")] * 12
 
 
@@ -288,10 +273,19 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
     # Layout do Indicadores ================================================
     # ===== Preparação dos dados para indicadores =====
-    # COB com maior número de ocorrências Prioridade 1 - Alta
-    prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("COB_nome").size().reset_index(name="Quantidade")
-    top_cob_prioridade_alta = prioridade_alta.loc[prioridade_alta["Quantidade"].idxmax()]
-    media_prioridade_alta = prioridade_alta["Quantidade"].mean()
+    # Filtrar ocorrências de prioridade 1 e agrupar por COB
+    prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("COB_nome", observed=True).size().reset_index(name="Quantidade")
+
+    # Verificar se existe pelo menos um valor maior que 0
+    if not prioridade_alta.empty and prioridade_alta["Quantidade"].sum() > 0:
+        top_cob_prioridade_alta = prioridade_alta.loc[prioridade_alta["Quantidade"].idxmax()]
+        top_cob_nome = top_cob_prioridade_alta["COB_nome"]
+        top_cob_quantidade = top_cob_prioridade_alta["Quantidade"]
+        media_prioridade_alta = prioridade_alta["Quantidade"].mean()
+    else:
+        top_cob_nome = "—"  # Se não houver registros válidos, exibe "-"
+        top_cob_quantidade = 0
+        media_prioridade_alta = 0
 
     # Município com maior frequência de ocorrências
     municipios_frequencia = df_filtered.groupby("municipio").size().reset_index(name="Frequencia")
@@ -304,9 +298,19 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
     media_unidade = unidades_ocorrencias["Quantidade"].mean()
 
     # Unidade com maior número de ocorrências Prioridade 1 - Alta
-    unidade_prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("UNIDADE").size().reset_index(name="Quantidade")
-    top_unidade_prioridade_alta = unidade_prioridade_alta.loc[unidade_prioridade_alta["Quantidade"].idxmax()]
-    media_unidade_prioridade_alta = unidade_prioridade_alta["Quantidade"].mean()
+    # Filtrar ocorrências de prioridade 1 e agrupar por Unidade
+    unidade_prioridade_alta = df_filtered[df_filtered["Prioridade"] == "1"].groupby("UNIDADE", observed=True).size().reset_index(name="Quantidade")
+
+    # Verificar se existe pelo menos um valor maior que 0
+    if not unidade_prioridade_alta.empty and unidade_prioridade_alta["Quantidade"].sum() > 0:
+        top_unidade_prioridade_alta = unidade_prioridade_alta.loc[unidade_prioridade_alta["Quantidade"].idxmax()]
+        top_unidade_nome = top_unidade_prioridade_alta["UNIDADE"]
+        top_unidade_quantidade = top_unidade_prioridade_alta["Quantidade"]
+        media_unidade_prioridade_alta = unidade_prioridade_alta["Quantidade"].mean()
+    else:
+        top_unidade_nome = "—"  # Se não houver registros válidos, exibe "-"
+        top_unidade_quantidade = 0
+        media_unidade_prioridade_alta = 0
 
     # Unidade com maior número de recursos empenhados
     recursos_empenhados = df_filtered.groupby("UNIDADE")["total_vtr"].sum().reset_index(name="TotalRecursos")
@@ -338,14 +342,14 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
 
     # ===== Indicadores =====
 
-    # Indicator 1: COB com maior número de ocorrências Prioridade 1 - Alta
+    # Criar indicador
     fig1 = go.Figure(go.Indicator(
         mode='number+delta',
         title={
-            "text": f"<span>{top_cob_prioridade_alta['COB_nome']} - Top COB</span><br>"
+            "text": f"<span>{top_cob_nome} - Top COB</span><br>"
                     f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
         },
-        value=top_cob_prioridade_alta["Quantidade"],
+        value=top_cob_quantidade,
         number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
     ))
@@ -378,13 +382,14 @@ def line_graph_1(start_date, end_date, cobs, n_intervals,toggle):
     fig3.update_layout(template=template)
 
     # Indicator 4: Unidade com maior número de ocorrências Prioridade 1 - Alta
+    # Criar indicador
     fig4 = go.Figure(go.Indicator(
         mode='number+delta',
         title={
-            "text": f"<span>{top_unidade_prioridade_alta['UNIDADE']} - Top Unidade</span><br>"
+            "text": f"<span>{top_unidade_nome} - Top Unidade</span><br>"
                     f"<span style='font-size:90%'>Maior Prioridade 1 - Alta</span>"
         },
-        value=top_unidade_prioridade_alta["Quantidade"],
+        value=top_unidade_quantidade,
         number={'suffix': " ocorrências", 'font': {'size': 40}},
         delta={'relative': True, 'valueformat': '.1%', 'reference': media_unidade_prioridade_alta, 'position': "bottom", 'font': {'size': 30}}
     ))
