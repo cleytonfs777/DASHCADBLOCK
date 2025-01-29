@@ -1,3 +1,5 @@
 Rodar a aplicação local:
 
 gunicorn --bind 0.0.0.0:8080 index:server
+
+Atualização
